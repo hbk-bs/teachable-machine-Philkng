@@ -1,0 +1,248 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Air Guitar Gesture Recognition</title>
+    <style>
+        body, html {
+            margin: 0;
+            padding: 0;
+            width: 100%;
+            height: 100%;
+            overflow: hidden;
+            position: relative;
+            font-family: Arial, sans-serif;
+        }
+
+        #canvas-container {
+            width: 100%;
+            height: 80%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            background-color: #c63636;
+            position: relative;
+        }
+
+        #canvas {
+            border: 1px solid #c03d3d;
+            background-color: transparent;
+            transform: scaleX(-1);
+        }
+
+        #left-image,
+        #right-image {
+            position: absolute;
+            height: 100%;
+        }
+
+        #left-image {
+            left: 0;
+        }
+
+        #right-image {
+            right: 0;
+        }
+
+        #description-container {
+            width: 100%;
+            display: none;
+            text-align: center;
+            margin-top: 20px;
+        }
+
+        .description {
+            width: 50%;
+            margin: 0 auto;
+            padding: 10px;
+            background-color: #ffffff;
+            box-shadow: 0 2px 4px rgba(255, 255, 255, 0.1);
+        }
+
+        #toggle-description-button {
+            position: absolute;
+            bottom: 10px;
+            left: 50%;
+            transform: translateX(-50%);
+            padding: 8px 16px;
+            background-color: #000000;
+            color: #ffffff;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+
+        #flames-container {
+            position: absolute;
+            width: 100%;
+            bottom: 0;
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .flame {
+            width: 50px;
+            height: 50px;
+            background-image: url('flame.png'); /* Passe den Dateinamen an */
+            background-size: cover;
+        }
+
+        #start-button {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            padding: 12px 24px;
+            background-color: #ff5733; /* Hervorhebung der Farbe */
+            color: #ffffff;
+            border: none;
+            border-radius: 8px;
+            cursor: pointer;
+            font-size: 18px;
+            font-weight: bold;
+            transition: background-color 0.3s ease; /* Weiche Farbübergänge */
+        }
+
+        #start-button:hover {
+            background-color: #e64d00; /* Dunklere Farbe beim Hover */
+        }
+    </style>
+</head>
+<body>
+    <div id="canvas-container">
+        <img id="left-image" src="left_image.jpg" alt="Left Image">
+        <canvas id="canvas"></canvas>
+        <img id="right-image" src="right_image.jpg" alt="Right Image">
+        <div id="flames-container">
+            <div class="flame"></div>
+            <div class="flame"></div>
+        </div>
+        <button id="start-button" onclick="init()">Start</button>
+    </div>
+    <div id="description-container">
+        <div class="description">
+            <p>Halte deine Arme in jener Haltung, in der du Gitarre Spielen würdest.</p>
+        </div>
+    </div>
+    <button id="toggle-description-button">Wie funktioniert AirGuitar</button>
+    <div><canvas id="canvas"></canvas></div>
+    <div id="label-container"></div>
+    <script src="https://cdn.jsdelivr.net/npm/@tensorflow/tfjs@1.3.1/dist/tf.min.js"></script>
+    <script src="https://cdn.jsdelivr.net/npm/@teachablemachine/pose@0.8/dist/teachablemachine-pose.min.js"></script>
+    <script src="script.js"></script>
+    <script type="text/javascript">
+        // Funktion zum Abspielen des Sounds basierend auf der erkannten Pose
+        let isSoundPlaying = false; // Variable, um den Status des Sound-Abspielens zu verfolgen
+
+        async function playSound(pose) {
+            if (!isSoundPlaying) { // Überprüfen, ob bereits ein Sound abgespielt wird
+                isSoundPlaying = true; // Den Status des Sound-Abspielens aktualisieren
+                const soundFiles = {
+                    highNote: 'high_note.mp3',
+                    middleNote: 'middle_note.mp3',
+                    lowNote: 'low_note.mp3'
+                    // Füge hier weitere Posen und entsprechende Sound-Dateien hinzu
+                };
+
+                const audio = new Audio(soundFiles[pose]);
+                await audio.play(); // Den Sound abspielen und auf das Ende warten
+                isSoundPlaying = false; // Den Status des Sound-Abspielens aktualisieren, wenn der Sound beendet ist
+            }
+        }
+
+        async function predict() {
+            const { pose, posenetOutput } = await model.estimatePose(webcam.canvas);
+            const prediction = await model.predict(posenetOutput);
+
+            for (let i = 0; i < maxPredictions; i++) {
+                const classPrediction =
+                    prediction[i].className + ": " + prediction[i].probability.toFixed(2);
+                labelContainer.childNodes[i].innerHTML = classPrediction;
+            }
+
+            // Erkannte Posen mit Sounds verknüpfen
+            if (pose) {
+                console.log(prediction)
+                if (prediction[0].className === 'Hohe Noten' && prediction[0].probability > 0.5) {
+                    console.log("in pose high note");
+                    playSound('highNote');
+                } else if (prediction[1].className === 'Mittlere Noten' && prediction[1].probability > 0.5) {
+                    playSound('middleNote');
+                } else if (prediction[2].className === 'Tiefe Noten' && prediction[2].probability > 0.5) {
+                    playSound('lowNote');
+                }
+            }
+
+            // Posenerkennung zeichnen
+            drawPose(pose);
+        }
+
+        // der ursprüngliche Code
+        document.addEventListener("DOMContentLoaded", function() {
+            const descriptionContainer = document.getElementById("description-container");
+            const toggleDescriptionButton = document.getElementById("toggle-description-button");
+
+            toggleDescriptionButton.addEventListener("click", function() {
+                if (descriptionContainer.style.display === "none") {
+                    descriptionContainer.style.display = "block";
+                    toggleDescriptionButton.textContent = "Beschreibung ausblenden";
+                } else {
+                    descriptionContainer.style.display = "none";
+                    toggleDescriptionButton.textContent = "Beschreibung anzeigen";
+                }
+            });
+        });
+
+        // the link to your model provided by Teachable Machine export panel
+        const URL = "https://teachablemachine.withgoogle.com/models/ktxCHuMqY/";
+        let model, webcam, ctx, labelContainer, maxPredictions;
+
+        async function init() {
+            const startButton = document.getElementById("start-button");
+            startButton.style.display = "none"; // Startbutton ausblenden
+
+            const modelURL = URL + "model.json";
+            const metadataURL = URL + "metadata.json";
+
+            // load the model and metadata
+            model = await tmPose.load(modelURL, metadataURL);
+            maxPredictions = model.getTotalClasses();
+
+            // Webcam einrichten
+            const size = 500;
+            const flip = true;
+            webcam = new tmPose.Webcam(size, size, flip);
+            await webcam.setup();
+            await webcam.play();
+            window.requestAnimationFrame(loop);
+
+            // DOM-Elemente holen
+            const canvas = document.getElementById("canvas");
+            canvas.width = size; canvas.height = size;
+            ctx = canvas.getContext("2d");
+            labelContainer = document.getElementById("label-container");
+            for (let i = 0; i < maxPredictions; i++) {
+                labelContainer.appendChild(document.createElement("div"));
+            }
+        }
+
+        async function loop(timestamp) {
+            webcam.update();
+            await predict();
+            window.requestAnimationFrame(loop);
+        }
+
+        function drawPose(pose) {
+            if (webcam.canvas) {
+                ctx.drawImage(webcam.canvas, 0, 0);
+                if (pose) {
+                    const minPartConfidence = 0.5;
+                    tmPose.drawKeypoints(pose.keypoints, minPartConfidence, ctx);
+                    tmPose.drawSkeleton(pose.keypoints, minPartConfidence, ctx);
+                }
+            }
+        }
+    </script>
+</body>
+</html>
